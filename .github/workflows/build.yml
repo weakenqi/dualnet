@@ -1,0 +1,48 @@
+name: build-apk
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解压工程
+        run: |
+          set -e
+          if [ -f DualNetAccel.zip ]; then unzip -q DualNetAccel.zip; fi
+          ls -la
+
+      - name: 下载 tun2socks 二进制
+        run: |
+          set -e
+          url=$(curl -s https://api.github.com/repos/xjasonlyu/tun2socks/releases/latest \
+            | grep -o '"browser_download_url": *"[^"]*"' \
+            | sed 's/.*"\(https[^"]*\)"/\1/' \
+            | grep -i 'android' | grep -i 'arm64' | head -1)
+          echo "picked: $url"
+          curl -fL -o DualNetAccel/app/src/main/assets/tun2socks "$url"
+          chmod +x DualNetAccel/app/src/main/assets/tun2socks
+          ls -lh DualNetAccel/app/src/main/assets/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.6'
+
+      - name: 编译
+        run: gradle -p DualNetAccel assembleDebug --no-daemon --stacktrace
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualNetAccel-apk
+          path: DualNetAccel/app/build/outputs/apk/debug/*.apk
